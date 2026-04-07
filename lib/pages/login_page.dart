@@ -15,6 +15,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passCtrl = TextEditingController();
   bool _loading = false;
   bool _obscure = true;
+  int _logoTapCount = 0; // tap logo 5x untuk akses register admin
 
   Future<void> _login() async {
     if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
@@ -29,6 +30,17 @@ class _LoginPageState extends State<LoginPage> {
       _showSnack('Login gagal: ${e.toString()}', isError: true);
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _onLogoTap() {
+    setState(() => _logoTapCount++);
+    if (_logoTapCount >= 5) {
+      _logoTapCount = 0;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RegisterPage()),
+      );
     }
   }
 
@@ -69,27 +81,30 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo area
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      color: AppTheme.emas,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        )
-                      ],
+                  // Logo area — tap 5x untuk akses register admin
+                  GestureDetector(
+                    onTap: _onLogoTap,
+                    child: Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        color: AppTheme.emas,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          )
+                        ],
+                      ),
+                      child: const Icon(Icons.store_rounded,
+                          color: Colors.white, size: 48),
                     ),
-                    child: const Icon(Icons.store_rounded,
-                        color: Colors.white, size: 48),
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Warung Al-Asr',
+                    'Kasir Barokah',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 28,
@@ -212,56 +227,22 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: _loading
                                 ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2.5),
-                            )
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2.5),
+                                  )
                                 : const Text(
-                              'Masuk',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600),
-                            ),
+                                    'Masuk',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600),
+                                  ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Link daftar
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Belum punya akun? ',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const RegisterPage()),
-                        ),
-                        child: const Text(
-                          'Daftar di sini',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.emasTerang,
-                            decoration: TextDecoration.underline,
-                            decorationColor: AppTheme.emasTerang,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                   const SizedBox(height: 16),
                 ],

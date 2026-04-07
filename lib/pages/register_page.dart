@@ -22,31 +22,86 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_passCtrl.text != _konfirPassCtrl.text) {
-      _showSnack('Password dan konfirmasi tidak cocok', isError: true);
-      return;
-    }
     setState(() => _loading = true);
     try {
-      final res = await Supabase.instance.client.auth.signUp(
+      await Supabase.instance.client.auth.signUp(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
+        data: {
+          'nama': _namaCtrl.text.trim(),
+          'is_admin': true,
+        },
       );
 
-      if (res.user != null) {
-        // Simpan profil awal
-        await SupabaseService.updateProfil({
-          'nama': _namaCtrl.text.trim(),
-        });
-        // AuthGate otomatis redirect ke MainPage
+      // Data nama & is_admin sudah tersimpan di metadata user (raw_user_meta_data)
+      // Trigger handle_new_user di Supabase akan otomatis buat baris profil
+      // saat email dikonfirmasi dan user pertama kali login
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppTheme.hijauEmerald.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.mark_email_read_rounded,
+                      color: AppTheme.hijauEmerald, size: 36),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Cek Email Kamu!',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.hitamLembut,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Link konfirmasi sudah dikirim ke\n${_emailCtrl.text.trim()}\n\nKlik link tersebut lalu login.',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: AppTheme.abuAbu,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context); // tutup dialog
+                    Navigator.pop(context); // kembali ke login
+                  },
+                  child: const Text('Ke Halaman Login',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        );
       }
     } on AuthException catch (e) {
       _showSnack(e.message, isError: true);
-      if (mounted) setState(() => _loading = false);
     } catch (e) {
       _showSnack('Terjadi kesalahan: $e', isError: true);
-      if (mounted) setState(() => _loading = false);
     }
+    if (mounted) setState(() => _loading = false);
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -134,7 +189,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'Daftar Akun',
+                    'Daftar Akun Admin',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 24,
@@ -144,7 +199,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Mulai catat usahamu dengan berkah',
+                    'Akun ini memiliki akses penuh ke aplikasi',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 13,
@@ -250,7 +305,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   size: 20,
                                 ),
                                 onPressed: () => setState(
-                                        () => _obscureKonfir = !_obscureKonfir),
+                                    () => _obscureKonfir = !_obscureKonfir),
                               ),
                             ),
                             validator: (v) {
@@ -276,55 +331,25 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                               child: _loading
                                   ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5),
-                              )
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5),
+                                    )
                                   : const Text(
-                                'Daftar Sekarang',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                                      'Buat Akun Admin',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Link ke Login
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Sudah punya akun? ',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: const Text(
-                          'Masuk di sini',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.emasTerang,
-                            decoration: TextDecoration.underline,
-                            decorationColor: AppTheme.emasTerang,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                   const SizedBox(height: 12),
                 ],

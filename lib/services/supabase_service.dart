@@ -1,7 +1,75 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
+  // ── Client biasa (anon key) ──
   static final SupabaseClient client = Supabase.instance.client;
+
+  // ── Client admin (service_role key) — hanya untuk buat/hapus user ──
+  static SupabaseClient get adminClient => SupabaseClient(
+        dotenv.env['SUPABASE_URL']!,
+        dotenv.env['SUPABASE_SERVICE_ROLE_KEY']!,
+      );
+
+  // ───────────── AUTH ─────────────
+  static Future<void> signIn(String email, String password) async {
+    await client.auth.signInWithPassword(email: email, password: password);
+  }
+
+  static Future<void> signOut() async {
+    await client.auth.signOut();
+  }
+
+  static User? get currentUser => client.auth.currentUser;
+
+  // ───────────── CEK ADMIN ─────────────
+  static Future<bool> isAdmin() async {
+    final uid = client.auth.currentUser?.id;
+    if (uid == null) return false;
+    final res = await client
+        .from('profil')
+        .select('is_admin')
+        .eq('id', uid)
+        .maybeSingle();
+    return res?['is_admin'] == true;
+  }
+
+  // ───────────── KELOLA USER (admin only) ─────────────
+  // Buat user baru — pakai service_role key
+  static Future<void> buatUser(String email, String password, String nama) async {
+    // 1. Buat akun auth
+    final res = await adminClient.auth.admin.createUser(
+      AdminUserAttributes(
+        email: email,
+        password: password,
+        emailConfirm: true, // langsung aktif tanpa verifikasi email
+      ),
+    );
+
+    final uid = res.user?.id;
+    if (uid == null) throw Exception('Gagal membuat user');
+
+    // 2. Isi profil
+    await adminClient.from('profil').upsert({
+      'id': uid,
+      'nama': nama,
+      'is_admin': false,
+    });
+  }
+
+  // Ambil semua user (untuk tampilan di halaman admin)
+  static Future<List<Map<String, dynamic>>> getDaftarUser() async {
+    final res = await client
+        .from('profil')
+        .select('id, nama, is_admin, created_at')
+        .order('created_at');
+    return List<Map<String, dynamic>>.from(res);
+  }
+
+  // Hapus user (admin only)
+  static Future<void> hapusUser(String uid) async {
+    await adminClient.auth.admin.deleteUser(uid);
+  }
 
   // ───────────── PRODUK ─────────────
   static Future<List<Map<String, dynamic>>> getProduk() async {
@@ -58,13 +126,14 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(res);
   }
 
-  static Future<Map<String, dynamic>> getRingkasanBulan(int bulan, int tahun) async {
+  static Future<Map<String, dynamic>> getRingkasanBulan(
+      int bulan, int tahun) async {
     final res = await client.rpc('ringkasan_bulan',
         params: {'p_bulan': bulan, 'p_tahun': tahun});
     return Map<String, dynamic>.from(res ?? {});
   }
 
-  // ───────────── AKUN / PROFIL ─────────────
+  // ───────────── PROFIL ─────────────
   static Future<Map<String, dynamic>?> getProfil() async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return null;
@@ -78,14 +147,4 @@ class SupabaseService {
     if (uid == null) return;
     await client.from('profil').upsert({'id': uid, ...data});
   }
-
-  static Future<void> signIn(String email, String password) async {
-    await client.auth.signInWithPassword(email: email, password: password);
-  }
-
-  static Future<void> signOut() async {
-    await client.auth.signOut();
-  }
-
-  static User? get currentUser => client.auth.currentUser;
 }

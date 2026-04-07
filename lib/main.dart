@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme/app_theme.dart';
 import 'pages/login_page.dart';
 import 'pages/main_page.dart';
+import 'services/supabase_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await dotenv.load(fileName: '.env');
   await initializeDateFormatting('id_ID', null);
 
   await Supabase.initialize(
-    url: 'https://xsogwqsxhyjolvuwwkil.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzb2d3cXN4aHlqb2x2dXd3a2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNDg2NjIsImV4cCI6MjA5MDYyNDY2Mn0.TokR0p-gdAVN-ZGNrLTdHBhxswAP0XlR36_ZhetT65c',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
   runApp(const MyApp());
@@ -37,9 +40,8 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
     return StreamBuilder<AuthState>(
-      stream: supabase.auth.onAuthStateChange,
+      stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -48,10 +50,28 @@ class AuthGate extends StatelessWidget {
         }
         final session = snapshot.data?.session;
         if (session != null) {
+          // Sync profil dari metadata saat pertama login
+          _syncProfil(session);
           return const MainPage();
         }
         return const LoginPage();
       },
     );
+  }
+
+  Future<void> _syncProfil(Session session) async {
+    try {
+      final meta = session.user.userMetadata;
+      if (meta == null || meta.isEmpty) return;
+
+      final existing = await SupabaseService.getProfil();
+      // Hanya update jika nama belum terisi (login pertama kali)
+      if (existing == null || (existing['nama'] == null || existing['nama'].toString().isEmpty)) {
+        await SupabaseService.updateProfil({
+          'nama': meta['nama'] ?? '',
+          'is_admin': meta['is_admin'] ?? false,
+        });
+      }
+    } catch (_) {}
   }
 }
