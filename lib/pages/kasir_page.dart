@@ -187,7 +187,7 @@ class _KasirPageState extends State<KasirPage> {
                   style: TextStyle(fontFamily: 'Poppins'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Bayar',
+            child: const Text('Simpan',
                 style: TextStyle(
                     fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
           ),

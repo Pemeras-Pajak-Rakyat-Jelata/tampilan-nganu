@@ -17,21 +17,35 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscure = true;
   int _logoTapCount = 0; // tap logo 5x untuk akses register admin
 
-  Future<void> _login() async {
-    if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
-      _showSnack('Email dan password wajib diisi', isError: true);
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await SupabaseService.signIn(
-          _emailCtrl.text.trim(), _passCtrl.text);
-    } catch (e) {
-      _showSnack('Login gagal: ${e.toString()}', isError: true);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+ Future<void> _login() async {
+  if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
+    _showSnack('Email dan password wajib diisi', isError: true);
+    return;
+  }
+
+  setState(() => _loading = true);
+
+  try {
+    await SupabaseService.signIn(
+      _emailCtrl.text.trim(),
+      _passCtrl.text,
+    );
+
+    await SupabaseService.absenMasuk();
+
+    _showSnack('Login berhasil');
+
+  } catch (e) {
+    _showSnack(
+      'Login gagal: ${e.toString()}',
+      isError: true,
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _loading = false);
     }
   }
+}
 
   void _onLogoTap() {
     setState(() => _logoTapCount++);

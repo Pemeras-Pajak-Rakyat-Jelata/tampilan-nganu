@@ -147,4 +147,64 @@ class SupabaseService {
     if (uid == null) return;
     await client.from('profil').upsert({'id': uid, ...data});
   }
+
+    // ───────────── ABSENSI ─────────────
+ static Future<void> absenMasuk() async {
+  final user = client.auth.currentUser;
+  if (user == null) return;
+
+  final now = DateTime.now();
+  final today = now.toIso8601String().split('T')[0];
+
+  final jam =
+      "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+  final profil = await client
+      .from('profil')
+      .select('nama')
+      .eq('id', user.id)
+      .maybeSingle();
+
+  final nama = profil?['nama'] ?? user.email ?? 'User';
+
+  final cek = await client
+      .from('absensi')
+      .select()
+      .eq('user_id', user.id)
+      .eq('tanggal', today);
+
+  if (cek.isEmpty) {
+    await client.from('absensi').insert({
+      'user_id': user.id,
+      'nama_user': nama,
+      'tanggal': today,
+      'jam_masuk': jam,
+    });
+  }
 }
+
+  static Future<List<Map<String, dynamic>>> getAbsensiHariIni() async {
+    final today = DateTime.now().toIso8601String().split('T')[0];
+
+    final res = await client
+        .from('absensi')
+        .select()
+        .eq('tanggal', today)
+        .order('jam_masuk');
+
+    return List<Map<String, dynamic>>.from(res);
+  }
+
+  static Future<List<Map<String, dynamic>>> getAbsensiByTanggal(
+      String tanggal) async {
+    final res = await client
+        .from('absensi')
+        .select()
+        .eq('tanggal', tanggal)
+        .order('jam_masuk');
+
+    return List<Map<String, dynamic>>.from(res);
+  }
+  
+}
+

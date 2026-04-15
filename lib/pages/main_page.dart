@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:kasir_barokah/pages/absensi_page.dart';
 import '../theme/app_theme.dart';
+import '../services/supabase_service.dart';
+
 import 'dashboard_page.dart';
 import 'kasir_page.dart';
 import 'stok_page.dart';
@@ -15,25 +18,79 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _currentIndex = 0;
+  bool _loading = true;
+  bool _isAdmin = false;
 
-  final List<Widget> _pages = const [
-    DashboardPage(),
-    KasirPage(),
-    StokPage(),
-    LaporanPage(),
-    AkunPage(),
-  ];
+  List<Widget> _pages = [];
+  List<_NavItem> _navItems = [];
 
-  final List<_NavItem> _navItems = const [
-    _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.point_of_sale_rounded, label: 'Kasir'),
-    _NavItem(icon: Icons.inventory_2_rounded, label: 'Stok'),
-    _NavItem(icon: Icons.bar_chart_rounded, label: 'Laporan'),
-    _NavItem(icon: Icons.person_rounded, label: 'Akun'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    try {
+      final admin = await SupabaseService.isAdmin();
+
+      setState(() {
+        _isAdmin = admin;
+
+        if (_isAdmin) {
+          // ADMIN = semua akses
+          _pages = const [
+            DashboardPage(),
+            KasirPage(),
+            StokPage(),
+            LaporanPage(),
+            AbsensiPage(),
+            AkunPage(),
+          ];
+
+          _navItems = const [
+            _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+            _NavItem(icon: Icons.point_of_sale_rounded, label: 'Kasir'),
+            _NavItem(icon: Icons.inventory_2_rounded, label: 'Stok'),
+            _NavItem(icon: Icons.bar_chart_rounded, label: 'Laporan'),
+            _NavItem(icon: Icons.fact_check_rounded, label: 'List Absen'),
+            _NavItem(icon: Icons.person_rounded, label: 'Akun'),
+          ];
+        } else {
+          _pages = const [
+            DashboardPage(),
+            KasirPage(),
+            StokPage(),
+            AkunPage(),
+          ];
+
+          _navItems = const [
+            _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+            _NavItem(icon: Icons.point_of_sale_rounded, label: 'Kasir'),
+            _NavItem(icon: Icons.inventory_2_rounded, label: 'Stok'),
+            _NavItem(icon: Icons.person_rounded, label: 'Akun'),
+          ];
+        }
+
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: AppTheme.hijauEmerald,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -58,58 +115,23 @@ class _MainPageState extends State<MainPage> {
               children: List.generate(_navItems.length, (i) {
                 final item = _navItems[i];
                 final selected = _currentIndex == i;
-                // Kasir (index 1) jadi FAB style
-                if (i == 1) {
-                  return GestureDetector(
-                    onTap: () => setState(() => _currentIndex = i),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppTheme.hijauMuda, AppTheme.hijauEmerald],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.hijauEmerald.withOpacity(0.4),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              )
-                            ],
-                          ),
-                          child: Icon(item.icon,
-                              color: Colors.white,
-                              size: selected ? 26 : 24),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.label,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.hijauEmerald,
-                          ),
-                        )
-                      ],
-                    ),
-                  );
-                }
+
                 return GestureDetector(
-                  onTap: () => setState(() => _currentIndex = i),
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = i;
+                    });
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     decoration: selected
                         ? BoxDecoration(
-                            color: AppTheme.hijauEmerald.withOpacity(0.1),
+                            color:
+                                AppTheme.hijauEmerald.withOpacity(0.10),
                             borderRadius: BorderRadius.circular(12),
                           )
                         : null,
@@ -118,10 +140,10 @@ class _MainPageState extends State<MainPage> {
                       children: [
                         Icon(
                           item.icon,
+                          size: 24,
                           color: selected
                               ? AppTheme.hijauEmerald
                               : AppTheme.abuAbu,
-                          size: 24,
                         ),
                         const SizedBox(height: 3),
                         Text(
@@ -153,5 +175,9 @@ class _MainPageState extends State<MainPage> {
 class _NavItem {
   final IconData icon;
   final String label;
-  const _NavItem({required this.icon, required this.label});
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+  });
 }

@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/supabase_service.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({super.key});
@@ -76,6 +81,293 @@ class _LaporanPageState extends State<LaporanPage>
     }
   }
 
+  void _showExportMenu() {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Export PDF',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              ListTile(
+                leading: const Icon(Icons.receipt_long,
+                    color: AppTheme.hijauEmerald),
+                title: const Text(
+                  'Laporan Harian',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportPdfHarian();
+                },
+              ),
+
+              ListTile(
+                leading: const Icon(Icons.bar_chart,
+                    color: AppTheme.emas),
+                title: const Text(
+                  'Laporan Bulanan',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportPdfBulanan();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+
+Future<void> _exportPdfHarian() async {
+  final pdf = pw.Document();
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (context) => [
+        pw.Container(
+          padding: const pw.EdgeInsets.all(16),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.green800,
+            borderRadius: pw.BorderRadius.circular(12),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Kasir Barokah',
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 24,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Laporan Harian',
+                style: const pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        pw.SizedBox(height: 16),
+
+        pw.Text(
+          'Tanggal : ${_fmtTgl.format(_selectedDate)}',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+
+        pw.SizedBox(height: 10),
+
+        pw.Text('Total Omzet : Rp ${_fmt.format(_totalHarian)}'),
+        pw.Text('Jumlah Transaksi : ${_transaksiHarian.length}'),
+
+        pw.SizedBox(height: 20),
+
+        pw.Table.fromTextArray(
+          headers: ['ID', 'Jam', 'Metode', 'Total'],
+          data: _transaksiHarian.map((t) {
+            final waktu =
+                DateTime.parse(t['created_at']).toLocal();
+
+            return [
+              '${t['id']}',
+              DateFormat('HH:mm').format(waktu),
+              '${t['metode_bayar'] ?? '-'}',
+              'Rp ${_fmt.format(t['total'])}',
+            ];
+          }).toList(),
+        ),
+      ],
+    ),
+  );
+
+  await Printing.layoutPdf(
+    onLayout: (format) async => pdf.save(),
+  );
+}
+
+Future<void> _exportPdfBulanan() async {
+  final totalBulan = (_ringkasanBulan['total'] ?? 0) as num;
+  final transaksi = (_ringkasanBulan['jumlah_transaksi'] ?? 0) as num;
+  final rataHari = (_ringkasanBulan['rata_per_hari'] ?? 0) as num;
+
+  final persen1 = transaksi == 0 ? 0 : 70;
+  final persen2 = transaksi == 0 ? 0 : 30;
+
+  final pdf = pw.Document();
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (context) => [
+        pw.Container(
+          padding: const pw.EdgeInsets.all(18),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.green800,
+            borderRadius: pw.BorderRadius.circular(14),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Kasir Barokah',
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 24,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Laporan Bulanan',
+                style: const pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        pw.SizedBox(height: 18),
+
+        pw.Text(
+          'Periode : ${_fmtBulan.format(_selectedDate)}',
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+
+        pw.SizedBox(height: 14),
+
+        pw.Container(
+          padding: const pw.EdgeInsets.all(14),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: pw.BorderRadius.circular(10),
+          ),
+          child: pw.Column(
+            children: [
+              _pdfRow('Total Omzet', 'Rp ${_fmt.format(totalBulan)}'),
+              _pdfRow('Jumlah Transaksi', '$transaksi'),
+              _pdfRow('Rata-rata / Hari', 'Rp ${_fmt.format(rataHari)}'),
+            ],
+          ),
+        ),
+
+        pw.SizedBox(height: 24),
+
+        pw.Text(
+          'Visual Ringkasan',
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
+
+        pw.SizedBox(height: 12),
+
+        pw.Row(
+          children: [
+            pw.Container(
+              width: 120,
+              height: 120,
+              child: pw.Stack(
+                alignment: pw.Alignment.center,
+                children: [
+                  pw.CircularProgressIndicator(
+                    value: persen1 / 100,
+                    strokeWidth: 16,
+                    color: PdfColors.green,
+                    backgroundColor: PdfColors.orange100,
+                  ),
+                  pw.Text(
+                    '$persen1%',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(width: 20),
+
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Hijau : Performa utama'),
+                pw.SizedBox(height: 6),
+                pw.Text('Sisa : Potensi growth'),
+              ],
+            ),
+          ],
+        ),
+
+        pw.SizedBox(height: 24),
+
+        pw.Text(
+          'Catatan:',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+
+        pw.Text(
+          'Usaha menunjukkan performa baik pada periode ini. '
+          'Tetap jaga kualitas layanan dan stok barang.',
+        ),
+      ],
+    ),
+  );
+
+  await Printing.layoutPdf(
+    onLayout: (format) async => pdf.save(),
+  );
+}
+
+pw.Widget _pdfRow(String kiri, String kanan) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 6),
+    child: pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(kiri),
+        pw.Text(
+          kanan,
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
   double get _totalHarian =>
       _transaksiHarian.fold(0, (s, t) => s + (t['total'] as num));
 
@@ -86,12 +378,16 @@ class _LaporanPageState extends State<LaporanPage>
       appBar: AppBar(
         title: const Text('Laporan'),
         backgroundColor: AppTheme.hijauEmerald,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_today_rounded, color: Colors.white),
-            onPressed: _pilihTanggal,
-          ),
-        ],
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+          onPressed: _showExportMenu,
+        ),
+        IconButton(
+          icon: const Icon(Icons.calendar_today_rounded, color: Colors.white),
+          onPressed: _pilihTanggal,
+        ),
+      ],
         bottom: TabBar(
           controller: _tabCtrl,
           indicatorColor: AppTheme.emasTerang,
@@ -344,16 +640,22 @@ class _BulananTab extends StatelessWidget {
     final totalTransaksi = (ringkasan['jumlah_transaksi'] ?? 0) as num;
     final rataHari = (ringkasan['rata_per_hari'] ?? 0) as num;
 
+    final tunai = (ringkasan['tunai'] ?? 0) as num;
+    final qris = (ringkasan['qris'] ?? 0) as num;
+    final transfer = (ringkasan['transfer'] ?? 0) as num;
+
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
       color: AppTheme.hijauEmerald,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Bulan badge
           Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               decoration: BoxDecoration(
                 color: AppTheme.emas.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
@@ -369,110 +671,199 @@ class _BulananTab extends StatelessWidget {
               ),
             ),
           ),
+
           const SizedBox(height: 20),
 
-          // Islamic decorative total card
+          // CARD TOTAL
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [AppTheme.hijauEmerald, Color(0xFF0D4A33)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.hijauEmerald,
+                  Color(0xFF0D4A33),
+                ],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Stack(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Opacity(
-                  opacity: 0.06,
-                  child: CustomPaint(
-                    size: const Size(double.infinity, 120),
-                    painter: IslamicPatternPainter(color: Colors.white),
+                Text(
+                  'Total Omzet Bulan Ini',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 13,
+                    fontFamily: 'Poppins',
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total Omzet Bulan Ini',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Rp ${fmt.format(totalBulan)}',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'بَارَكَ اللهُ فِي رِزْقِكَ',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.emasTerang,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                Text(
+                  'Rp ${fmt.format(totalBulan)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
               ],
             ),
           ),
+
           const SizedBox(height: 16),
 
-          Row(children: [
-            Expanded(
-              child: _StatCard(
-                label: 'Total Transaksi',
-                value: '${totalTransaksi}x',
-                icon: Icons.receipt_long_rounded,
-                color: AppTheme.emas,
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  label: 'Transaksi',
+                  value: '${totalTransaksi}x',
+                  icon: Icons.receipt_long_rounded,
+                  color: AppTheme.emas,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  label: 'Rata-rata/Hari',
+                  value: 'Rp ${fmt.format(rataHari)}',
+                  icon: Icons.trending_up,
+                  color: AppTheme.birInfo,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // PIE CHART
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFE5E7EB),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _StatCard(
-                label: 'Rata-rata/Hari',
-                value: 'Rp ${fmt.format(rataHari)}',
-                icon: Icons.trending_up_rounded,
-                color: AppTheme.birInfo,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Statistik Metode Pembayaran',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  height: 220,
+                  child: PieChart(
+                    PieChartData(
+                      centerSpaceRadius: 42,
+                      sectionsSpace: 3,
+                      sections: [
+                        PieChartSectionData(
+                          value: tunai.toDouble(),
+                          color: Colors.green,
+                          radius: 55,
+                          title: 'Tunai',
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          value: qris.toDouble(),
+                          color: Colors.blue,
+                          radius: 55,
+                          title: 'QRIS',
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          value: transfer.toDouble(),
+                          color: Colors.orange,
+                          radius: 55,
+                          title: 'Transfer',
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                _legend('Tunai', Colors.green, tunai, fmt),
+                _legend('QRIS', Colors.blue, qris, fmt),
+                _legend('Transfer', Colors.orange, transfer, fmt),
+              ],
             ),
-          ]),
+          ),
 
           if (ringkasan.isEmpty) ...[
             const SizedBox(height: 40),
-            Center(
-              child: Column(
-                children: [
-                  Icon(Icons.bar_chart_rounded,
-                      size: 56, color: AppTheme.abuAbu.withOpacity(0.4)),
-                  const SizedBox(height: 12),
-                  const Text('Data bulanan belum tersedia',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: AppTheme.abuAbu,
-                          fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Pastikan RPC ringkasan_bulan sudah dibuat di Supabase',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        color: AppTheme.abuAbu.withOpacity(0.7)),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+            const Center(
+              child: Text(
+                'Data belum tersedia',
+                style: TextStyle(fontFamily: 'Poppins'),
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _legend(
+    String title,
+    Color color,
+    num nominal,
+    NumberFormat fmt,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Text(
+            'Rp ${fmt.format(nominal)}',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );

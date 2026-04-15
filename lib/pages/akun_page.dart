@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/supabase_service.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
 
 class AkunPage extends StatefulWidget {
   const AkunPage({super.key});
@@ -11,6 +14,8 @@ class AkunPage extends StatefulWidget {
 
 class _AkunPageState extends State<AkunPage> {
   Map<String, dynamic>? _profil;
+  XFile? _pickedImage;
+  bool _uploadingImage = false;
   bool _loading = true;
   bool _isAdmin = false;
   bool _editMode = false;
@@ -51,6 +56,23 @@ class _AkunPageState extends State<AkunPage> {
       if (mounted) setState(() => _loading = false);
     }
   }
+  
+  Future<void> _pickImage() async {
+  final picker = ImagePicker();
+
+  final image = await picker.pickImage(
+    source: ImageSource.gallery,
+    imageQuality: 70,
+  );
+
+  if (image == null) return;
+
+  setState(() {
+    _pickedImage = image;
+  });
+
+  _showSnack('Gambar dipilih');
+}
 
   Future<void> _simpan() async {
     setState(() => _saving = true);
@@ -155,17 +177,38 @@ class _AkunPageState extends State<AkunPage> {
                         ),
                         Column(
                           children: [
-                            Container(
+                          GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.2),
                                 shape: BoxShape.circle,
-                                border: Border.all(color: AppTheme.emasTerang, width: 2),
+                                border: Border.all(
+                                  color: AppTheme.emasTerang,
+                                  width: 2,
+                                ),
                               ),
-                              child: const Icon(Icons.person_rounded,
-                                  color: Colors.white, size: 44),
+                              child: ClipOval(
+                                child: _pickedImage != null
+                                    ? kIsWeb
+                                        ? Image.network(
+                                            _pickedImage!.path,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Image.file(
+                                            File(_pickedImage!.path),
+                                            fit: BoxFit.cover,
+                                          )
+                                    : const Icon(
+                                        Icons.person_rounded,
+                                        color: Colors.white,
+                                        size: 44,
+                                      ),
+                              ),
                             ),
+                          ),
                             const SizedBox(height: 12),
                             Text(
                               _profil?['nama'] ?? 'Pengguna',
