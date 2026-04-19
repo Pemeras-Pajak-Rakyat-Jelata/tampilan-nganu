@@ -32,7 +32,6 @@ class _AbsensiPageState extends State<AbsensiPage> {
     setState(() => loading = true);
 
     final tgl = DateFormat('yyyy-MM-dd').format(selectedDate);
-
     final result = await SupabaseService.getAbsensiByTanggal(tgl);
 
     if (mounted) {
@@ -70,72 +69,43 @@ class _AbsensiPageState extends State<AbsensiPage> {
   }
 
   Future<void> exportPdf() async {
-  final pdf = pw.Document();
+    final pdf = pw.Document();
 
-  pdf.addPage(
-    pw.MultiPage(
-      build: (context) => [
-        pw.Text(
-          'Laporan Absensi',
-          style: pw.TextStyle(
-            fontSize: 24,
-            fontWeight: pw.FontWeight.bold,
+    pdf.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Text(
+            'Laporan Absensi',
+            style: pw.TextStyle(
+              fontSize: 24,
+              fontWeight: pw.FontWeight.bold,
+            ),
           ),
-        ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            DateFormat('d MMMM yyyy', 'id_ID').format(selectedDate),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Table.fromTextArray(
+            headers: ['No', 'Nama', 'Jam Masuk'],
+            data: List.generate(filtered.length, (i) {
+              final item = filtered[i];
 
-        pw.SizedBox(height: 8),
+              return [
+                '${i + 1}',
+                item['nama_user'] ?? '-',
+                item['jam_masuk'] ?? '-',
+              ];
+            }),
+          ),
+        ],
+      ),
+    );
 
-        pw.Text(
-          DateFormat('d MMMM yyyy', 'id_ID').format(selectedDate),
-        ),
-
-        pw.SizedBox(height: 20),
-
-        pw.Table.fromTextArray(
-          headers: ['No', 'Nama', 'Jam Masuk', 'Status'],
-          data: List.generate(filtered.length, (i) {
-            final item = filtered[i];
-            final jam = item['jam_masuk'] ?? '-';
-            final nama = item['nama_user'] ?? '-';
-            final telat = isLate(jam);
-
-            return [
-              '${i + 1}',
-              nama,
-              jam,
-              telat ? 'Telat' : 'Tepat',
-            ];
-          }),
-        ),
-      ],
-    ),
-  );
-
-  await Printing.layoutPdf(
-    onLayout: (format) async => pdf.save(),
-  );
-}
-
-  bool isLate(String jam) {
-    try {
-      final p = jam.split(':');
-      final h = int.parse(p[0]);
-      final m = int.parse(p[1]);
-
-      if (h > 8) return true;
-      if (h == 8 && m > 0) return true;
-
-      return false;
-    } catch (_) {
-      return false;
-    }
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
   }
-
-  int telatCount() =>
-      filtered.where((e) => isLate(e['jam_masuk'] ?? '')).length;
-
-  int tepatCount() =>
-      filtered.where((e) => !isLate(e['jam_masuk'] ?? '')).length;
 
   @override
   Widget build(BuildContext context) {
@@ -145,22 +115,23 @@ class _AbsensiPageState extends State<AbsensiPage> {
         title: const Text("Absensi Karyawan"),
         centerTitle: true,
         backgroundColor: AppTheme.hijauEmerald,
-      actions: [
-      IconButton(
-        onPressed: exportPdf,
-        icon: const Icon(Icons.picture_as_pdf),
-      ),
-      IconButton(
-        onPressed: pilihTanggal,
-        icon: const Icon(Icons.calendar_month),
-      ),
-    ],
+        actions: [
+          IconButton(
+            onPressed: exportPdf,
+            icon: const Icon(Icons.picture_as_pdf),
+          ),
+          IconButton(
+            onPressed: pilihTanggal,
+            icon: const Icon(Icons.calendar_month),
+          ),
+        ],
       ),
       body: loading
           ? const Center(
               child: CircularProgressIndicator(
-              color: AppTheme.hijauEmerald,
-            ))
+                color: AppTheme.hijauEmerald,
+              ),
+            )
           : RefreshIndicator(
               onRefresh: loadData,
               child: ListView(
@@ -175,7 +146,7 @@ class _AbsensiPageState extends State<AbsensiPage> {
 
                   if (filtered.isEmpty) emptyState(),
 
-                  ...filtered.map((e) => itemCard(e)).toList(),
+                  ...filtered.map((e) => itemCard(e)),
                 ],
               ),
             ),
@@ -239,11 +210,13 @@ class _AbsensiPageState extends State<AbsensiPage> {
   Widget summaryCard() {
     return Row(
       children: [
-        Expanded(child: statBox("Hadir", filtered.length, Colors.green)),
-        const SizedBox(width: 10),
-        Expanded(child: statBox("Tepat", tepatCount(), Colors.blue)),
-        const SizedBox(width: 10),
-        Expanded(child: statBox("Telat", telatCount(), Colors.orange)),
+        Expanded(
+          child: statBox(
+            "Hadir",
+            filtered.length,
+            Colors.green,
+          ),
+        ),
       ],
     );
   }
@@ -274,7 +247,6 @@ class _AbsensiPageState extends State<AbsensiPage> {
   Widget itemCard(Map<String, dynamic> e) {
     final nama = e['nama_user'] ?? '-';
     final jam = e['jam_masuk'] ?? '-';
-    final telat = isLate(jam);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -320,27 +292,6 @@ class _AbsensiPageState extends State<AbsensiPage> {
               ],
             ),
           ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: telat
-                  ? Colors.orange.withOpacity(0.12)
-                  : Colors.green.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              telat ? "Telat" : "Tepat",
-              style: TextStyle(
-                color: telat ? Colors.orange : Colors.green,
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-              ),
-            ),
-          )
         ],
       ),
     );

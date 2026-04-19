@@ -7,10 +7,10 @@ class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  State<DashboardPage> createState() => DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class DashboardPageState extends State<DashboardPage> {
   bool _loading = true;
   List<Map<String, dynamic>> _transaksiHariIni = [];
   List<Map<String, dynamic>> _stokRendah = [];
@@ -19,7 +19,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   final _fmt = NumberFormat('#,##0', 'id_ID');
   final _fmtTgl = DateFormat('EEEE, d MMMM yyyy', 'id_ID');
-
+  
+  void reload() {
+  _load();
+}
   @override
   void initState() {
     super.initState();

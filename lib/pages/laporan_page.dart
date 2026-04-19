@@ -6,16 +6,18 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
-
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:share_plus/share_plus.dart';
 
 class LaporanPage extends StatefulWidget {
   const LaporanPage({super.key});
 
   @override
-  State<LaporanPage> createState() => _LaporanPageState();
+  State<LaporanPage> createState() => LaporanPageState();
 }
 
-class _LaporanPageState extends State<LaporanPage>
+class LaporanPageState extends State<LaporanPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   DateTime _selectedDate = DateTime.now();
@@ -26,6 +28,7 @@ class _LaporanPageState extends State<LaporanPage>
   final _fmtTgl = DateFormat('d MMMM yyyy', 'id_ID');
   final _fmtBulan = DateFormat('MMMM yyyy', 'id_ID');
 
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +37,11 @@ class _LaporanPageState extends State<LaporanPage>
     _loadHarian();
     _loadBulanan();
   }
+
+  void reload() {
+  _loadHarian();
+  _loadBulanan();
+}
 
   @override
   void dispose() {
@@ -57,6 +65,70 @@ class _LaporanPageState extends State<LaporanPage>
       if (mounted) setState(() => _ringkasanBulan = data);
     } catch (_) {}
   }
+  Future<void> exportCsv() async {
+  try {
+    final totalBulan = (_ringkasanBulan['total'] ?? 0) as num;
+    final totalTransaksi =
+        (_ringkasanBulan['jumlah_transaksi'] ?? 0) as num;
+    final rataHari =
+        (_ringkasanBulan['rata_per_hari'] ?? 0) as num;
+
+    final buffer = StringBuffer();
+    buffer.writeln('KASIR BAROKAH');
+    buffer.writeln('LAPORAN BULANAN');
+    buffer.writeln(
+      'Periode;${DateFormat('MMMM yyyy', 'id_ID').format(_selectedDate)}',
+    );
+    buffer.writeln(
+      'Dicetak;${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+    );
+    buffer.writeln('');
+    buffer.writeln('Keterangan;Nilai');
+    buffer.writeln(
+      'Total Omzet;Rp ${_fmt.format(totalBulan)}',
+    );
+    buffer.writeln(
+      'Jumlah Transaksi;${_fmt.format(totalTransaksi)}',
+    );
+    buffer.writeln(
+      'Rata-rata per Hari;Rp ${_fmt.format(rataHari)}',
+    );
+
+    buffer.writeln('');
+    buffer.writeln('Semoga Allah memberkahi usaha ini');
+    buffer.writeln('');
+    buffer.writeln('Owner,');
+    buffer.writeln('');
+    buffer.writeln('');
+    buffer.writeln('(____________________)');
+
+    final bytes = Uint8List.fromList(
+      utf8.encode(buffer.toString()),
+    );
+
+    final fileName =
+        'Laporan_Bulanan_${DateFormat('yyyy_MM').format(_selectedDate)}.csv';
+
+    await Share.shareXFiles(
+      [
+        XFile.fromData(
+          bytes,
+          mimeType: 'text/csv',
+          name: fileName,
+        ),
+      ],
+      text: 'Laporan Bulanan Kasir Barokah',
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Export bulanan gagal: $e'),
+      ),
+    );
+  }
+}
 
   Future<void> _pilihTanggal() async {
     final tgl = await showDatePicker(
@@ -382,6 +454,10 @@ pw.Widget _pdfRow(String kiri, String kanan) {
         IconButton(
           icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
           onPressed: _showExportMenu,
+        ),
+        IconButton(
+          onPressed: exportCsv,
+          icon: const Icon(Icons.table_view_rounded),
         ),
         IconButton(
           icon: const Icon(Icons.calendar_today_rounded, color: Colors.white),

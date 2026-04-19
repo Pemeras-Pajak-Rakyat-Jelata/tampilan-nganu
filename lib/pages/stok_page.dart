@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/supabase_service.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 
 class StokPage extends StatefulWidget {
   const StokPage({super.key});
@@ -48,7 +51,8 @@ class _StokPageState extends State<StokPage> {
         .toList();
   }
 
-  void _showForm({Map<String, dynamic>? produk}) {
+  void _showForm({Map<String, dynamic>? produk})  async {
+      final result = await
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -58,6 +62,9 @@ class _StokPageState extends State<StokPage> {
         onSaved: _load,
       ),
     );
+    if (result == true) {
+        _load();
+      }
   }
 
   Future<void> _hapus(int id, String nama) async {
@@ -84,7 +91,9 @@ class _StokPageState extends State<StokPage> {
     );
     if (konfirm == true) {
       await SupabaseService.hapusProduk(id);
-      _load();
+      await _load();
+
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -224,7 +233,7 @@ class _StokPageState extends State<StokPage> {
                     if (p['kategori'] != null)
                       Text(
                         p['kategori'],
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
                           color: AppTheme.abuAbu,
@@ -264,7 +273,7 @@ class _StokPageState extends State<StokPage> {
                         const SizedBox(height: 2),
                         Text(
                           p['satuan'] ?? 'pcs',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 10,
                             color: AppTheme.abuAbu,
@@ -322,9 +331,9 @@ class _StokPageState extends State<StokPage> {
 class _ProdukForm extends StatefulWidget {
   final Map<String, dynamic>? produk;
   final VoidCallback onSaved;
-
+  
   const _ProdukForm({this.produk, required this.onSaved});
-
+  
   @override
   State<_ProdukForm> createState() => _ProdukFormState();
 }
@@ -337,57 +346,127 @@ class _ProdukFormState extends State<_ProdukForm> {
   final _kategoriCtrl = TextEditingController();
   final _satuanCtrl = TextEditingController();
   final _minCtrl = TextEditingController();
+  String? _selectedSatuan = 'Pcs';
+  File? _imageFile;
+  String? _gambarUrl;
+  Uint8List? _imageBytes;
+  final picker = ImagePicker();
   bool _loading = false;
 
   @override
   void initState() {
-    super.initState();
-    if (widget.produk != null) {
-      final p = widget.produk!;
-      _namaCtrl.text = p['nama'] ?? '';
-      _hargaCtrl.text = p['harga']?.toString() ?? '';
-      _stokCtrl.text = p['stok']?.toString() ?? '';
-      _kategoriCtrl.text = p['kategori'] ?? '';
-      _satuanCtrl.text = p['satuan'] ?? '';
-      _minCtrl.text = p['stok_minimum']?.toString() ?? '5';
-    } else {
-      _satuanCtrl.text = 'pcs';
-      _minCtrl.text = '5';
-    }
-  }
+  super.initState();
 
-  Future<void> _simpan() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-    final data = {
-      'nama': _namaCtrl.text.trim(),
-      'harga': int.parse(_hargaCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')),
-      'stok': int.parse(_stokCtrl.text),
-      'kategori': _kategoriCtrl.text.trim(),
-      'satuan': _satuanCtrl.text.trim(),
-      'stok_minimum': int.parse(_minCtrl.text),
-      'user_id': SupabaseService.currentUser?.id,
-    };
-    try {
-      if (widget.produk != null) {
-        await SupabaseService.updateProduk(widget.produk!['id'], data);
-      } else {
-        await SupabaseService.tambahProduk(data);
-      }
-      if (mounted) {
-        Navigator.pop(context);
-        widget.onSaved();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menyimpan: $e'),
-          backgroundColor: AppTheme.merahError,
-        ));
-        setState(() => _loading = false);
-      }
-    }
+  if (widget.produk != null) {
+    final p = widget.produk!;
+
+    _namaCtrl.text = p['nama'] ?? '';
+    _hargaCtrl.text = p['harga']?.toString() ?? '';
+    _stokCtrl.text = p['stok']?.toString() ?? '';
+    _kategoriCtrl.text = p['kategori'] ?? '';
+    _minCtrl.text = p['stok_minimum']?.toString() ?? '5';
+
+    final satuan = p['satuan'] ?? 'Pcs';
+
+    _selectedSatuan = [
+      'Pcs',
+      'Kg',
+      'Liter',
+      'Box',
+      'Pack',
+      'Botol'
+    ].contains(satuan)
+        ? satuan
+        : 'Pcs';
+
+    _satuanCtrl.text = _selectedSatuan!;
+  } else {
+    _selectedSatuan = 'Pcs';
+    _satuanCtrl.text = 'Pcs';
+    _minCtrl.text = '5';
   }
+}
+
+ Future<void> _pickImage() async {
+  final picked = await picker.pickImage(source: ImageSource.gallery);
+
+  if (picked != null) {
+    final bytes = await picked.readAsBytes();
+
+    print("IMAGE PICKED: ${bytes.length} bytes");
+
+    setState(() {
+      _imageBytes = bytes;
+    });
+  } else {
+    print("IMAGE NOT PICKED");
+  }
+}
+  Future<void> _simpan() async {
+  if (!_formKey.currentState!.validate()) return;
+
+  try {
+    setState(() => _loading = true);
+
+    final user = SupabaseService.client.auth.currentUser;
+
+    if (user == null) {
+      throw Exception("User belum login");
+    }
+
+    String? imageUrl;
+
+    if (_imageBytes != null)  {
+      final fileName =
+          DateTime.now().millisecondsSinceEpoch.toString();
+
+      await SupabaseService.client.storage
+    .from('produk')
+    .uploadBinary(fileName, _imageBytes!);
+
+      imageUrl = SupabaseService.client.storage
+          .from('produk')
+          .getPublicUrl(fileName);
+           print("UPLOAD URL: $imageUrl");
+    }
+    
+    final harga =
+        int.tryParse(_hargaCtrl.text.replaceAll('.', '')) ?? 0;
+
+    final stok =
+        int.tryParse(_stokCtrl.text) ?? 0;
+      print("DATA YANG DISIMPAN:");
+    print({
+      'nama': _namaCtrl.text,
+      'harga': harga,
+      'stok': stok,
+      'gambar': imageUrl,
+    });
+    await SupabaseService.client.from('produk').insert({
+      'nama': _namaCtrl.text,
+      'harga': harga,
+      'stok': stok,
+      'kategori': _kategoriCtrl.text,
+      'satuan': _selectedSatuan,
+      'gambar': imageUrl,
+      'user_id': user.id,
+      'stok_minimum': int.tryParse(_minCtrl.text) ?? 0,
+    });
+
+    widget.onSaved();
+    Navigator.pop(context, true);
+
+  } catch (e) {
+    print("ERROR SIMPAN: $e");
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Gagal menyimpan: $e")),
+    );
+
+  } finally {
+    setState(() => _loading = false);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -437,13 +516,51 @@ class _ProdukFormState extends State<_ProdukForm> {
               Row(children: [
                 Expanded(
                   child: _field(_hargaCtrl, 'Harga (Rp)', Icons.payments_outlined,
-                      keyboardType: TextInputType.number, required: true),
+                      keyboardType: TextInputType.number, required: true,
+                      validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Harga wajib diisi';
+                    }
+
+                    final harga = int.tryParse(v);
+
+                    if (harga == null) {
+                      return 'Harga tidak valid';
+                    }
+
+                    if (harga < 100) {
+                      return 'Minimal harga Rp 100';
+                    }
+
+                    return null;
+                  },
                 ),
+                      
+                ),
+                
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _field(_stokCtrl, 'Stok', Icons.inventory_outlined,
-                      keyboardType: TextInputType.number, required: true),
+                  child:DropdownButtonFormField<String>(
+                value: _selectedSatuan,
+                decoration: const InputDecoration(
+                  labelText: 'Satuan',
                 ),
+                items: const [
+                  DropdownMenuItem(value: 'Pcs', child: Text('Pcs')),
+                  DropdownMenuItem(value: 'Kg', child: Text('Kg')),
+                  DropdownMenuItem(value: 'Liter', child: Text('Liter')),
+                  DropdownMenuItem(value: 'Box', child: Text('Box')),
+                  DropdownMenuItem(value: 'Pack', child: Text('Pack')),
+                  DropdownMenuItem(value: 'Botol', child: Text('Botol')),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                  _selectedSatuan = value!;
+                  _satuanCtrl.text = value;
+                });
+                },
+              ),
+              ),
               ]),
               const SizedBox(height: 14),
               Row(children: [
@@ -458,10 +575,39 @@ class _ProdukFormState extends State<_ProdukForm> {
                 ),
               ]),
               const SizedBox(height: 14),
-              _field(_kategoriCtrl, 'Kategori (opsional)',
-                  Icons.category_outlined),
-              const SizedBox(height: 24),
-              SizedBox(
+              _field(_kategoriCtrl, 'Kategori (opsional)', Icons.category_outlined),
+              GestureDetector(
+  onTap: _pickImage,
+  child: Container(
+    width: double.infinity,
+    height: 130,
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.grey.shade300),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: _imageBytes == null
+        ? const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.camera_alt_outlined,
+                    size: 34, color: Colors.green),
+                SizedBox(height: 8),
+                Text('Upload Gambar Produk'),
+              ],
+            ),
+          )
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.memory(
+              _imageBytes!,
+              fit: BoxFit.cover,
+              width: double.infinity,
+            ),
+          ),
+  ),
+),
+                SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
@@ -494,6 +640,7 @@ class _ProdukFormState extends State<_ProdukForm> {
       IconData icon, {
         TextInputType keyboardType = TextInputType.text,
         bool required = false,
+        String? Function(String?)? validator,
       }) {
     return TextFormField(
       controller: ctrl,

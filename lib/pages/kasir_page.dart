@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/supabase_service.dart';
+import 'main_page.dart';
 
 class KasirPage extends StatefulWidget {
   const KasirPage({super.key});
 
   @override
-  State<KasirPage> createState() => _KasirPageState();
+  State<KasirPage> createState() => KasirPageState();
 }
 
-class _KasirPageState extends State<KasirPage> {
+class KasirPageState extends State<KasirPage> {
   List<Map<String, dynamic>> _produk = [];
   List<Map<String, dynamic>> _filtered = [];
   final Map<int, int> _keranjang = {}; // produkId -> qty
@@ -19,27 +20,41 @@ class _KasirPageState extends State<KasirPage> {
   String _metodeBayar = 'Tunai';
   final _fmt = NumberFormat('#,##0', 'id_ID');
 
+  void reload() {
+  _loadProduk();
+}
+
   @override
   void initState() {
     super.initState();
     _loadProduk();
   }
 
+  @override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+  _loadProduk();
+}
+
   Future<void> _loadProduk() async {
-    setState(() => _loading = true);
-    try {
-      final data = await SupabaseService.getProduk();
-      if (mounted) {
-        setState(() {
-          _produk = data;
-          _filter();
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _loading = false);
+  setState(() => _loading = true);
+
+  try {
+    final data = await SupabaseService.getProduk();
+
+    if (!mounted) return;
+
+    setState(() {
+      _produk = data;
+      _filter();
+      _loading = false;
+    });
+  } catch (e) {
+    if (mounted) {
+      setState(() => _loading = false);
     }
   }
+}
 
   void _filter() {
     final q = _query.toLowerCase();
@@ -138,6 +153,8 @@ class _KasirPageState extends State<KasirPage> {
       await _loadProduk();
 
       if (mounted) {
+        dashboardKey.currentState?.reload();
+        laporanKey.currentState?.reload();
         _showSukses(transaksiId);
       }
     } catch (e) {
@@ -174,7 +191,7 @@ class _KasirPageState extends State<KasirPage> {
             Text('Metode: $_metodeBayar',
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
             Text('$_totalItem item',
-                style: TextStyle(
+                style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
                     color: AppTheme.abuAbu)),
@@ -302,7 +319,7 @@ class _KasirPageState extends State<KasirPage> {
           // ── Produk Grid ──
           Expanded(
             child: _filtered.isEmpty
-                ? Center(
+                ? const Center(
                 child: Text('Produk tidak ditemukan',
                     style: TextStyle(
                         fontFamily: 'Poppins',
@@ -312,7 +329,7 @@ class _KasirPageState extends State<KasirPage> {
               gridDelegate:
               const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 1.6,
+                childAspectRatio: 0.72,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
@@ -355,13 +372,40 @@ class _KasirPageState extends State<KasirPage> {
                       mainAxisAlignment:
                       MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                p['nama'],
+
+                          // GAMBAR PRODUK
+                          Container(
+                            height: 70,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              color: Colors.grey.shade100,
+                            ),
+                            child: p['gambar'] != null && p['gambar'].toString().isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.network(
+                                      p['gambar'],
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                  const Icon(Icons.broken_image),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.image_outlined,
+                                    size: 30,
+                                    color: Colors.grey,
+                                  ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  p['nama'],
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w600,
@@ -546,7 +590,7 @@ class _KasirPageState extends State<KasirPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('$_totalItem item',
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                       fontFamily: 'Poppins',
                                       fontSize: 12,
                                       color: AppTheme.abuAbu)),

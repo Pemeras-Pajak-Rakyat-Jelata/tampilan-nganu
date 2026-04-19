@@ -4,6 +4,7 @@ import '../services/supabase_service.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 class AkunPage extends StatefulWidget {
   const AkunPage({super.key});
@@ -15,7 +16,8 @@ class AkunPage extends StatefulWidget {
 class _AkunPageState extends State<AkunPage> {
   Map<String, dynamic>? _profil;
   XFile? _pickedImage;
-  bool _uploadingImage = false;
+  final _formKey = GlobalKey<FormState>();
+  final bool _uploadingImage = false;
   bool _loading = true;
   bool _isAdmin = false;
   bool _editMode = false;
@@ -75,22 +77,35 @@ class _AkunPageState extends State<AkunPage> {
 }
 
   Future<void> _simpan() async {
+    final valid = _formKey.currentState?.validate() ?? false;
+
+    if (!valid) {
+      _showSnack('Periksa nomor telepon', isError: true);
+      return;
+    }
+
     setState(() => _saving = true);
+
     try {
       await SupabaseService.updateProfil({
         'nama': _namaCtrl.text.trim(),
         'telepon': _telpCtrl.text.trim(),
         'alamat': _alamatCtrl.text.trim(),
       });
+
       await _load();
+
       if (mounted) {
         setState(() => _editMode = false);
         _showSnack('Profil berhasil diperbarui');
       }
     } catch (e) {
-      if (mounted) _showSnack('Gagal: $e', isError: true);
+      _showSnack('Gagal: $e', isError: true);
     }
-    if (mounted) setState(() => _saving = false);
+
+    if (mounted) {
+      setState(() => _saving = false);
+    }
   }
 
   Future<void> _logout() async {
@@ -244,7 +259,7 @@ class _AkunPageState extends State<AkunPage> {
                             const SizedBox(height: 6),
                             Text(
                               user?.email ?? '',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
                                 color: AppTheme.emasTerang,
@@ -276,10 +291,40 @@ class _AkunPageState extends State<AkunPage> {
                                 color: AppTheme.hitamLembut)),
                         const SizedBox(height: 16),
                         if (_editMode) ...[
+                            Form(
+                            key: _formKey,
+                            child: Column(
+                              children: [
                           _editField(_namaCtrl, 'Nama Lengkap', Icons.person_outline),
                           const SizedBox(height: 12),
-                          _editField(_telpCtrl, 'Nomor Telepon', Icons.phone_outlined,
-                              keyboardType: TextInputType.phone),
+                          _editField(
+                          _telpCtrl,
+                          'Nomor Telepon',
+                          Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 13,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          validator: (v) {
+                          final value = v?.trim() ?? '';
+
+                          if (value.isEmpty) {
+                            return 'Nomor telepon wajib diisi';
+                          }
+
+                          if (value.length < 10) {
+                            return 'Minimal 10 digit';
+                          }
+
+                          if (value.length > 13) {
+                            return 'Maksimal 13 digit';
+                          }
+
+                          return null;
+                        },
+                        ),
+                              
                           const SizedBox(height: 12),
                           _editField(_alamatCtrl, 'Alamat', Icons.location_on_outlined,
                               maxLines: 2),
@@ -302,6 +347,9 @@ class _AkunPageState extends State<AkunPage> {
                                           fontSize: 15)),
                             ),
                           ),
+                          ],
+                          ),
+                        ),
                         ] else ...[
                           _infoRow(Icons.person_outline, 'Nama',
                               _profil?['nama'] ?? '-'),
@@ -311,6 +359,7 @@ class _AkunPageState extends State<AkunPage> {
                               _profil?['telepon'] ?? '-'),
                           _infoRow(Icons.location_on_outlined, 'Alamat',
                               _profil?['alamat'] ?? '-'),
+                        
                         ],
                       ],
                     ),
@@ -438,6 +487,7 @@ class _AkunPageState extends State<AkunPage> {
 
   // ── Form Buat User Baru ──
   void _showFormBuatUser() {
+    final _formKey = GlobalKey<FormState>();
     final namaCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final passCtrl = TextEditingController();
@@ -460,6 +510,8 @@ class _AkunPageState extends State<AkunPage> {
             top: 20,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
+          child: Form(
+          key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -482,7 +534,7 @@ class _AkunPageState extends State<AkunPage> {
                       fontWeight: FontWeight.w700,
                       color: AppTheme.hitamLembut)),
               const SizedBox(height: 4),
-              Text('User yang dibuat tidak bisa mengakses halaman ini',
+              const Text('User yang dibuat tidak bisa mengakses halaman ini',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
@@ -496,18 +548,48 @@ class _AkunPageState extends State<AkunPage> {
                   prefixIcon: Icon(Icons.person_outline,
                       color: AppTheme.hijauEmerald, size: 20),
                 ),
+                validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Nama wajib diisi';
+                }
+                return null;
+              },
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email_outlined,
-                      color: AppTheme.hijauEmerald, size: 20),
+            TextFormField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(
+                  Icons.email_outlined,
+                  color: AppTheme.hijauEmerald,
+                  size: 20,
                 ),
               ),
+              validator: (v) {
+                final value = v?.trim() ?? '';
+
+                if (value.isEmpty) {
+                  return 'Email wajib diisi';
+                }
+
+                final emailRegex = RegExp(
+                  r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+                );
+
+                if (!emailRegex.hasMatch(value)) {
+                  return 'Format email tidak valid';
+                }
+
+                return null;
+              },
+            ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: passCtrl,
@@ -526,6 +608,15 @@ class _AkunPageState extends State<AkunPage> {
                     onPressed: () => setStateModal(() => obscure = !obscure),
                   ),
                 ),
+                validator: (v) {
+                if (v == null || v.isEmpty) {
+                  return 'Password wajib diisi';
+                }
+                if (v.length < 6) {
+                  return 'Minimal 6 karakter';
+                }
+                return null;
+              },
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -579,6 +670,7 @@ class _AkunPageState extends State<AkunPage> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -627,7 +719,7 @@ class _AkunPageState extends State<AkunPage> {
                   }
                   final users = snap.data ?? [];
                   if (users.isEmpty) {
-                    return Center(
+                    return const Center(
                       child: Text('Belum ada user',
                           style: TextStyle(
                               fontFamily: 'Poppins', color: AppTheme.abuAbu)),
@@ -711,7 +803,7 @@ class _AkunPageState extends State<AkunPage> {
                                   ),
                                   Text(
                                     isAdminUser ? 'Admin' : 'User',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                         fontFamily: 'Poppins',
                                         fontSize: 11,
                                         color: AppTheme.abuAbu),
@@ -787,11 +879,18 @@ class _AkunPageState extends State<AkunPage> {
     IconData icon, {
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
+    String? Function(String?)? validator,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
+    
   }) {
     return TextFormField(
       controller: ctrl,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      validator: validator,
+      maxLength: maxLength,
+      inputFormatters: inputFormatters, 
       style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
@@ -813,7 +912,7 @@ class _AkunPageState extends State<AkunPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
                         color: AppTheme.abuAbu)),

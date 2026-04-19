@@ -9,6 +9,11 @@ import 'stok_page.dart';
 import 'laporan_page.dart';
 import 'akun_page.dart';
 
+final GlobalKey<KasirPageState> kasirKey = GlobalKey<KasirPageState>();
+final GlobalKey<LaporanPageState> laporanKey = GlobalKey<LaporanPageState>();
+final GlobalKey<DashboardPageState> dashboardKey =
+    GlobalKey<DashboardPageState>();
+
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
 
@@ -38,33 +43,30 @@ class _MainPageState extends State<MainPage> {
         _isAdmin = admin;
 
         if (_isAdmin) {
-          // ADMIN = semua akses
-          _pages = const [
-            DashboardPage(),
-            KasirPage(),
+          _pages = [
+            DashboardPage(key: dashboardKey),
+            KasirPage(key: kasirKey),
             StokPage(),
-            LaporanPage(),
+            LaporanPage(key: laporanKey),
             AbsensiPage(),
             AkunPage(),
           ];
-
-          _navItems = const [
+          _navItems = [
             _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
             _NavItem(icon: Icons.point_of_sale_rounded, label: 'Kasir'),
             _NavItem(icon: Icons.inventory_2_rounded, label: 'Stok'),
             _NavItem(icon: Icons.bar_chart_rounded, label: 'Laporan'),
-            _NavItem(icon: Icons.fact_check_rounded, label: 'List Absen'),
+            _NavItem(icon: Icons.fact_check_rounded, label: 'Absen'),
             _NavItem(icon: Icons.person_rounded, label: 'Akun'),
           ];
         } else {
-          _pages = const [
+          _pages = [
             DashboardPage(),
             KasirPage(),
             StokPage(),
             AkunPage(),
           ];
-
-          _navItems = const [
+          _navItems = [
             _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
             _NavItem(icon: Icons.point_of_sale_rounded, label: 'Kasir'),
             _NavItem(icon: Icons.inventory_2_rounded, label: 'Stok'),
@@ -84,32 +86,34 @@ class _MainPageState extends State<MainPage> {
     if (_loading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-            color: AppTheme.hijauEmerald,
-          ),
+          child: CircularProgressIndicator(color: AppTheme.hijauEmerald),
         ),
       );
     }
 
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            )
-          ],
-        ),
-        child: SafeArea(
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Container(
+          height: 64,
+          decoration: BoxDecoration(
+            color: const Color(0xFF3B3A28).withOpacity(0.92),
+            borderRadius: BorderRadius.circular(40),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(_navItems.length, (i) {
@@ -117,50 +121,46 @@ class _MainPageState extends State<MainPage> {
                 final selected = _currentIndex == i;
 
                 return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _currentIndex = i;
-                    });
+                  onTap: () async {
+                    setState(() => _currentIndex = i);
+                    if (i == 1) kasirKey.currentState?.reload();
+                    await Future.delayed(const Duration(milliseconds: 150));
+                    setState(() {});
                   },
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    padding: selected
+                        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+                        : const EdgeInsets.all(10),
                     decoration: selected
                         ? BoxDecoration(
-                            color:
-                                AppTheme.hijauEmerald.withOpacity(0.10),
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFFF5A823),
+                            borderRadius: BorderRadius.circular(30),
                           )
                         : null,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          item.icon,
-                          size: 24,
-                          color: selected
-                              ? AppTheme.hijauEmerald
-                              : AppTheme.abuAbu,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: selected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: selected
-                                ? AppTheme.hijauEmerald
-                                : AppTheme.abuAbu,
+                    child: selected
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(item.icon, color: Colors.white, size: 20),
+                              const SizedBox(width: 6),
+                              Text(
+                                item.label,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Icon(
+                            item.icon,
+                            color: AppTheme.hijauEmerald,
+                            size: 24,
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 );
               }),
@@ -172,12 +172,10 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
+// ← _NavItem harus di LUAR class _MainPageState
 class _NavItem {
   final IconData icon;
   final String label;
 
-  const _NavItem({
-    required this.icon,
-    required this.label,
-  });
+  const _NavItem({required this.icon, required this.label});
 }

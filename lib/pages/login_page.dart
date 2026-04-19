@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/supabase_service.dart';
@@ -13,56 +14,151 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+
   bool _loading = false;
   bool _obscure = true;
-  int _logoTapCount = 0; // tap logo 5x untuk akses register admin
+  int _logoTapCount = 0;
 
- Future<void> _login() async {
-  if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
-    _showSnack('Email dan password wajib diisi', isError: true);
-    return;
+  // SECURITY LOGIN
+  int _failedAttempts = 0;
+  DateTime? _lockUntil;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
   }
 
-  setState(() => _loading = true);
+  bool get _isLocked {
+    if (_lockUntil == null) return false;
+    return DateTime.now().isBefore(_lockUntil!);
+  }
 
-  try {
-    await SupabaseService.signIn(
-      _emailCtrl.text.trim(),
-      _passCtrl.text,
-    );
+  int get _remainingSeconds {
+    if (_lockUntil == null) return 0;
+    final s = _lockUntil!.difference(DateTime.now()).inSeconds;
+    return s > 0 ? s : 0;
+  }
 
-    await SupabaseService.absenMasuk();
+  void _startTimer() {
+    _timer?.cancel();
 
-    _showSnack('Login berhasil');
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
 
-  } catch (e) {
-    _showSnack(
-      'Login gagal: ${e.toString()}',
-      isError: true,
-    );
-  } finally {
-    if (mounted) {
-      setState(() => _loading = false);
+      if (_remainingSeconds <= 0) {
+        _timer?.cancel();
+        setState(() {});
+      } else {
+        setState(() {});
+      }
+    });
+  }
+
+  void _applyLockRule() {
+    int seconds = 0;
+
+    if (_failedAttempts >= 10) {
+      seconds = 300; // 5 menit
+    } else if (_failedAttempts >= 5) {
+      seconds = 120; // 2 menit
+    } else if (_failedAttempts >= 3) {
+      seconds = 30; // 30 detik
+    }
+
+    if (seconds > 0) {
+      _lockUntil = DateTime.now().add(Duration(seconds: seconds));
+      _startTimer();
     }
   }
-}
+
+  Future<void> _login() async {
+    if (_isLocked) {
+      _showSnack(
+        'Terlalu banyak percobaan login.\nCoba lagi dalam $_remainingSeconds detik.',
+        isError: true,
+      );
+      return;
+    }
+
+    if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
+      _showSnack('Email dan password wajib diisi', isError: true);
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      await SupabaseService.signIn(
+        _emailCtrl.text.trim(),
+        _passCtrl.text,
+      );
+
+      // reset kalau berhasil
+      _failedAttempts = 0;
+      _lockUntil = null;
+      _timer?.cancel();
+
+    } catch (e) {
+      _failedAttempts++;
+
+      _applyLockRule();
+
+      if (_isLocked) {
+        _showSnack(
+          'Login gagal $_failedAttempts kali.\nCoba lagi dalam $_remainingSeconds detik.',
+          isError: true,
+        );
+      } else {
+        _showSnack(
+          'Email atau password salah.',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   void _onLogoTap() {
     setState(() => _logoTapCount++);
+
     if (_logoTapCount >= 5) {
       _logoTapCount = 0;
+
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const RegisterPage()),
+        MaterialPageRoute(
+          builder: (_) => const RegisterPage(),
+        ),
       );
     }
   }
 
   void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? AppTheme.merahError : AppTheme.hijauEmerald,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor:
+            isError ? AppTheme.merahError : AppTheme.hijauEmerald,
+      ),
+    );
+  }
+
+  String _lockText() {
+    final sec = _remainingSeconds;
+
+    if (sec >= 60) {
+      final menit = (sec / 60).ceil();
+      return 'Tunggu $menit menit';
+    }
+
+    return 'Tunggu $sec detik';
   }
 
   @override
@@ -70,32 +166,26 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background gradient
+          // BACKGROUND
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [AppTheme.hijauEmerald, Color(0xFF0D4A33)],
+                colors: [
+                  AppTheme.hijauEmerald,
+                  Color(0xFF0D4A33),
+                ],
               ),
             ),
           ),
-          // Islamic pattern overlay
-          Opacity(
-            opacity: 0.07,
-            child: CustomPaint(
-              size: MediaQuery.of(context).size,
-              painter: IslamicPatternPainter(color: AppTheme.emas),
-            ),
-          ),
-          // Content
+
           Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo area — tap 5x untuk akses register admin
                   GestureDetector(
                     onTap: _onLogoTap,
                     child: Container(
@@ -104,161 +194,117 @@ class _LoginPageState extends State<LoginPage> {
                       decoration: BoxDecoration(
                         color: AppTheme.emas,
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          )
-                        ],
                       ),
-                      child: const Icon(Icons.store_rounded,
-                          color: Colors.white, size: 48),
+                      child: const Icon(
+                        Icons.store_rounded,
+                        color: Colors.white,
+                        size: 46,
+                      ),
                     ),
                   ),
+
                   const SizedBox(height: 20),
+
                   const Text(
                     'Kasir Barokah',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                      letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: AppTheme.emasTerang,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Pencatatan kasir untuk usaha yang berkah',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
 
-                  // Arabesque divider kecil
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      '✦ بِسْمِ اللَّهِ ✦',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.emasTerang,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 35),
 
-                  // Card form
                   Container(
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Colors.white,
-
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 30,
-                          offset: const Offset(0, 10),
-                        )
-                      ],
+                      borderRadius: BorderRadius.circular(22),
                     ),
-                    padding: const EdgeInsets.all(28),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Masuk ke Akun',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.hitamLembut,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Selamat datang kembali 👋',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            color: AppTheme.abuAbu,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        TextFormField(
+                        TextField(
                           controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
                             labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined,
-                                color: AppTheme.hijauEmerald),
+                            prefixIcon: Icon(Icons.email_outlined),
                           ),
                         ),
+
                         const SizedBox(height: 16),
-                        TextFormField(
+
+                        TextField(
                           controller: _passCtrl,
                           obscureText: _obscure,
                           decoration: InputDecoration(
                             labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline,
-                                color: AppTheme.hijauEmerald),
+                            prefixIcon:
+                                const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _obscure = !_obscure;
+                                });
+                              },
                               icon: Icon(
                                 _obscure
                                     ? Icons.visibility_off
                                     : Icons.visibility,
-                                color: AppTheme.abuAbu,
                               ),
-                              onPressed: () =>
-                                  setState(() => _obscure = !_obscure),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 28),
+
+                        const SizedBox(height: 24),
+
                         SizedBox(
                           width: double.infinity,
-                          height: 50,
+                          height: 52,
                           child: ElevatedButton(
-                            onPressed: _loading ? null : _login,
+                            onPressed:
+                                (_loading || _isLocked)
+                                    ? null
+                                    : _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.hijauEmerald,
+                              backgroundColor:
+                                  AppTheme.hijauEmerald,
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
+                                borderRadius:
+                                    BorderRadius.circular(14),
+                              ),
                             ),
                             child: _loading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2.5),
+                                ? const CircularProgressIndicator(
+                                    color: Colors.white,
                                   )
-                                : const Text(
-                                    'Masuk',
-                                    style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600),
+                                : Text(
+                                    _isLocked
+                                        ? _lockText()
+                                        : 'Masuk',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight:
+                                          FontWeight.w700,
+                                    ),
                                   ),
                           ),
                         ),
+
+                        if (_isLocked) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            'Terlalu banyak percobaan login',
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ]
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
                 ],
               ),
             ),

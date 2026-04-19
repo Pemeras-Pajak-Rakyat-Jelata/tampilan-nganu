@@ -58,13 +58,13 @@ class SupabaseService {
   }
 
   // Ambil semua user (untuk tampilan di halaman admin)
-  static Future<List<Map<String, dynamic>>> getDaftarUser() async {
-    final res = await client
-        .from('profil')
-        .select('id, nama, is_admin, created_at')
-        .order('created_at');
-    return List<Map<String, dynamic>>.from(res);
-  }
+ static Future<List<Map<String, dynamic>>> getDaftarUser() async {
+  final res = await adminClient
+      .from('profil')
+      .select();
+
+  return List<Map<String, dynamic>>.from(res);
+}
 
   // Hapus user (admin only)
   static Future<void> hapusUser(String uid) async {
@@ -127,13 +127,46 @@ class SupabaseService {
   }
 
   static Future<Map<String, dynamic>> getRingkasanBulan(
-      int bulan, int tahun) async {
-    final res = await client.rpc('ringkasan_bulan',
-        params: {'p_bulan': bulan, 'p_tahun': tahun});
-    return Map<String, dynamic>.from(res ?? {});
+    int bulan, int tahun) async {
+
+  final awal = DateTime(tahun, bulan, 1);
+  final akhir = DateTime(tahun, bulan + 1, 0, 23, 59, 59);
+
+  final res = await client
+      .from('transaksi')
+      .select()
+      .gte('created_at', awal.toIso8601String())
+      .lte('created_at', akhir.toIso8601String());
+
+  final data = List<Map<String, dynamic>>.from(res);
+
+  double total = 0;
+  double tunai = 0;
+  double qris = 0;
+  double transfer = 0;
+
+  for (final t in data) {
+    final nominal = (t['total'] as num).toDouble();
+    total += nominal;
+
+    final metode =
+        (t['metode_bayar'] ?? '').toString().toLowerCase();
+
+    if (metode == 'tunai') tunai += nominal;
+    if (metode == 'qris') qris += nominal;
+    if (metode == 'transfer') transfer += nominal;
   }
 
-  // ───────────── PROFIL ─────────────
+  return {
+    'total': total,
+    'jumlah_transaksi': data.length,
+    'rata_per_hari': data.isEmpty ? 0 : total / 30,
+    'tunai': tunai,
+    'qris': qris,
+    'transfer': transfer,
+  };
+}
+
   static Future<Map<String, dynamic>?> getProfil() async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return null;
